@@ -2,82 +2,89 @@ package com.example.TaskList;
 
 import java.util.ArrayList;
 
-import android.app.Activity;
-import android.os.Bundle;
-import android.widget.TextView;
+import com.google.tabmanager.TabManager;
 
-public class TaskListActivity extends Activity {
+import android.content.Intent;
+import android.os.Bundle;
+import android.support.v4.app.FragmentActivity;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.widget.TabHost;
+import android.widget.TabHost.TabSpec;
+
+public class TaskListActivity extends FragmentActivity {
+    TabHost tabHost;
+    TabManager tabManager;
+    TaskListDB db;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_task_list);
 
-        // get db and StringBuilder objects
-        TaskListDB db = new TaskListDB(this);
-        StringBuilder sb = new StringBuilder();
+        // get tab manager
+        tabHost = (TabHost) findViewById(android.R.id.tabhost);
+        tabHost.setup();
+        tabManager = new TabManager(this, tabHost, R.id.realtabcontent);
 
-        // insert a task
-        Task task = new Task(1, "Make dentist appointment", "", "0", "0");
-        long insertId = db.insertTask(task);
-        if (insertId > 0) {
-            sb.append("Row inserted! Insert Id: " + insertId + "\n");
+        // get database
+        db = new TaskListDB(getApplicationContext());
+
+        // add a tab for each list in the database
+        ArrayList<List> lists = db.getLists();
+        if (lists != null && lists.size() > 0) {
+            for (List list : lists) {
+                TabSpec tabSpec = tabHost.newTabSpec(list.getName());
+                tabSpec.setIndicator(list.getName());
+                tabManager.addTab(tabSpec, TaskListFragment.class, null);
+            }
         }
 
-        // insert a second task
-        Task task2 = new Task(1, "Take car in for oil change", "", "0", "0");
-        long insertId2 = db.insertTask(task2);
-        if (insertId2 > 0) {
-            sb.append("Row inserted! Insert Id: " + insertId2 + "\n");
+        // sets current tab to the last tab opened
+        if (savedInstanceState != null) {
+            tabHost.setCurrentTabByTag(savedInstanceState.getString("tab"));
         }
 
-        Task task3 = new Task(1, "Take out trash", "", "0", "0");
-        long insertId3 = db.insertTask(task3);
-        if (insertId3 > 0) {
-            sb.append("Row inserted! Insert Id: " + insertId3 + "\n");
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString("tab", tabHost.getCurrentTabTag());
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.activity_task_list, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch (item.getItemId()){
+            case R.id.menuAddTask:
+                Intent intent = new Intent(this, AddEditActivity.class);
+                intent.putExtra("tab", tabHost.getCurrentTabTag());
+                startActivity(intent);
+                break;
+            case R.id.menuDelete:
+                // Hide all tasks marked as complete
+                ArrayList<Task> tasks = db.getTasks(tabHost.getCurrentTabTag());
+                for (Task task : tasks){
+                    if (task.getCompletedDateMillis() > 0){
+                        task.setHidden(Task.TRUE);
+                        db.updateTask(task);
+                    }
+                }
+
+                // Refresh list
+                TaskListFragment currentFragment = (TaskListFragment)
+                        getSupportFragmentManager().
+                                findFragmentByTag(tabHost.getCurrentTabTag());
+                currentFragment.refreshTaskList();
+
+                break;
         }
-
-        Task task4 = new Task(1, "Water the plants", "", "0", "0");
-        long insertId4 = db.insertTask(task4);
-        if (insertId3 > 0) {
-            sb.append("Row inserted! Insert Id: " + insertId4 + "\n");
-        }
-
-        Task task5 = new Task(1, "Go to the bank", "", "0", "0");
-        long insertId5 = db.insertTask(task5);
-        if (insertId5 > 0) {
-            sb.append("Row inserted! Insert Id: " + insertId5 + "\n");
-        }
-
-        // update a task
-        //task.setId((int) insertId);
-        //task.setName("Update test");
-        //int updateCount = db.updateTask(task);
-        //if (updateCount == 1) {
-        //    sb.append("Task updated! Update count: " + updateCount + "\n");
-        //}
-
-        // delete a task
-        //int deleteCount = db.deleteTask(insertId);
-        //if (deleteCount == 1) {
-        //    sb.append("Task deleted! Delete count: " + deleteCount + "\n\n");
-        //}
-        //
-        //// delete old tasks (this may vary from system to system)
-        //db.deleteTask(5);
-        //db.deleteTask(7);
-
-
-
-        // display all tasks (id + name)
-        ArrayList<Task> tasks = db.getTasks("Personal");
-        for (Task t : tasks) {
-            sb.append(t.getId() + "|" + t.getName() + "\n");
-        }
-
-        // display string on UI
-        TextView taskListTextView = (TextView)
-                findViewById (R.id.taskListTextView);
-        taskListTextView.setText(sb.toString());
+        return super.onOptionsItemSelected(item);
     }
 }
